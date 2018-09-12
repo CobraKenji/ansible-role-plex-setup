@@ -1,0 +1,8 @@
+[Unit]
+Description=plexupdate
+After=network.target
+# We can require a data disk mount if needed
+# Requires=mnt-data.mount
+
+[Service]
+ExecStart={{ plexupdate_dest }}/plexupdate.sh -a -c -d -p -s -u

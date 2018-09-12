@@ -1,0 +1,105 @@
+---
+# file: roles/plex/tasks/main.yml
+# tasks file for plex
+
+- name: install wget, git
+  package:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - wget
+    - git
+
+- name: Download plex for Ubuntu/Debian
+  get_url:
+    url: '{{ plex_deb_url }}'
+    dest: '{{ plex_deb_path }}'
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: Download plex for CentOS/RHEL
+  get_url:
+    url: '{{ plex_rpm_url }}'
+    dest: '{{ plex_rpm_path }}'
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+- name: Installing plex on CentOS/RHEL
+  package:
+    name: '{{ plex_rpm_path }}'
+    state: present
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+- name: Installing plex on Ubuntu/Debian
+  apt:
+    deb: '{{ plex_deb_path }}'
+    state: present
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: configure firewalld to allow plex on CentOS/RHEL
+  firewalld:
+    port: '32400/tcp'
+    permanent: true
+    state: enabled
+  notify: restart firewalld 
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+- name: configure ufw to allow plex on Ubuntu/Debian
+  ufw:
+    rule: allow
+    to_port: 32400
+    proto: tcp
+    state: enabled
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+# Start plex
+- name: Ensure plex is running
+  service:
+    name: plexmediaserver
+    state: started
+
+- name: deploy plexupdate systemd service
+  template:
+    src: '{{ item }}.j2'
+    dest: '/etc/systemd/system/{{ item }}'
+    owner: root
+    group: root
+    mode: 0644
+  with_items: plexupdate.service
+  notify: restart plex
+
+- name: deploy systemd plexupdate timer
+  template:
+    src: '{{ item }}.j2'
+    dest: '/etc/systemd/system/{{ item }}'
+    owner: root
+    group: root
+    mode: 0644
+  with_items: 'plexupdate.timer'
+  register: plexupdatetimer
+
+- name: deploy plex update configration file
+  template:
+    src: '{{ item }}.j2'
+    dest: '/var/lib/plexmediaserver/{{ item }}'
+    owner: plex
+    group: plex
+    mode: 0744
+  with_items: '.plexupdate'
+
+- name: change permissions on pms folder
+  file:
+    path: '/var/lib/plexmediaserver'
+    owner: plex
+    group: plex
+    mode: 0744
+    recurse: yes
+
+- name: download plexupdate 
+  git:
+    repo: '{{ plexupdate_repo }}'
+    dest: '{{ plexupdate_dest }}'
+    clone: yes
+
+- name: Ensure plexupdate is running
+  service:
+    name: plexupdate
+    state: started

@@ -1,0 +1,12 @@
+---
+# file: roles/plex/handlers/main.yml
+# handlers file for plex
+
+- name: restart plex
+  service:
+    name: plexmediaserver
+    state: restarted
+
+- name: restart firewalld
+  become: yes
+  command: firewall-cmd --complete-reload
